@@ -1,0 +1,14 @@
+{
+  "name": "qwen-omni-tester",
+  "version": "1.0.0",
+  "description": "Qwen3.5-Omni Multimodal API Tester",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6",
+    "ws": "^8.16.0"
+  }
+}
