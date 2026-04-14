@@ -1679,11 +1679,22 @@ async function sendMessage() {
     if (fullText) html += `<div>${escapeHtml(fullText)}</div>`;
 
     if (audioDataChunks.length > 0) {
-      const mimeMap = { wav: 'audio/wav', mp3: 'audio/mpeg', pcm: 'audio/L16;rate=24000' };
-      const mime = mimeMap[audioFormat] || 'audio/wav';
-      const audioBlob = base64ChunksToBlob(audioDataChunks, mime);
-      const audioUrl = URL.createObjectURL(audioBlob);
-      html += `<audio controls autoplay src="${audioUrl}"></audio>`;
+      try {
+        // Try to play audio using Web Audio API for better compatibility
+        const audioId = 'audio-' + Date.now();
+        html += `<audio id="${audioId}" controls autoplay style="margin-top:8px">Audio playback not supported</audio>`;
+        html += `<div id="${audioId}-status" style="font-size:12px;color:var(--text-tertiary);margin-top:4px">Processing audio...</div>`;
+        
+        // Update UI first, then process audio
+        updateMessageBubble(assistantMsg, html);
+        
+        // Process and play audio asynchronously
+        playAudioChunks(audioDataChunks, audioFormat, audioId);
+      } catch (e) {
+        console.error('Audio setup error:', e);
+        html += `<div style="font-size:12px;color:#ff3b30;margin-top:4px">Audio error: ${e.message}</div>`;
+        updateMessageBubble(assistantMsg, html);
+      }
     }
 
     if (!fullText && !thinkingText && audioDataChunks.length === 0) {
@@ -1726,6 +1737,78 @@ function base64ChunksToBlob(chunks, mime) {
     offset += arr.length;
   }
   return new Blob([merged], { type: mime });
+}
+
+// Play audio chunks using Web Audio API for better compatibility
+async function playAudioChunks(chunks, format, audioId) {
+  const statusEl = document.getElementById(audioId + '-status');
+  const audioEl = document.getElementById(audioId);
+  
+  try {
+    // Concatenate all base64 chunks
+    const fullBase64 = chunks.join('');
+    
+    if (format === 'wav' || format === 'mp3') {
+      // For WAV/MP3, create a proper blob and use audio element
+      const mimeMap = { wav: 'audio/wav', mp3: 'audio/mpeg' };
+      const mime = mimeMap[format] || 'audio/wav';
+      const blob = base64ChunksToBlob(chunks, mime);
+      const url = URL.createObjectURL(blob);
+      
+      if (audioEl) {
+        audioEl.src = url;
+        audioEl.style.display = 'block';
+        if (statusEl) statusEl.remove();
+      }
+    } else {
+      // For PCM, use Web Audio API to decode and play
+      // Decode base64 to ArrayBuffer
+      const binary = atob(fullBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      
+      // Create AudioContext and decode
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+      
+      // Try to decode as raw PCM (16-bit little-endian)
+      const pcmData = new Int16Array(bytes.buffer);
+      const float32Data = new Float32Array(pcmData.length);
+      
+      // Convert Int16 to Float32
+      for (let i = 0; i < pcmData.length; i++) {
+        float32Data[i] = pcmData[i] / 32768.0;
+      }
+      
+      // Create audio buffer
+      const audioBuffer = audioContext.createBuffer(1, float32Data.length, 24000);
+      audioBuffer.getChannelData(0).set(float32Data);
+      
+      // Create source and play
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
+      source.start(0);
+      
+      if (statusEl) {
+        statusEl.textContent = 'Playing PCM audio...';
+        source.onended = () => {
+          statusEl.textContent = 'Audio playback complete';
+          if (audioEl) audioEl.style.display = 'none';
+        };
+      }
+    }
+  } catch (error) {
+    console.error('Audio playback error:', error);
+    if (statusEl) {
+      statusEl.textContent = 'Audio playback failed: ' + error.message;
+      statusEl.style.color = '#ff3b30';
+    }
+    if (audioEl) {
+      audioEl.style.display = 'none';
+    }
+  }
 }
 
 function clearChat() {
