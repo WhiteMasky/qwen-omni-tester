@@ -22,10 +22,22 @@ A web application for testing the Qwen3.5-Omni multimodal API with support for:
 ### 1. Install Dependencies
 
 ```bash
-npm install
+git clone https://github.com/WhiteMasky/qwen-omni-tester.git
 ```
 
 ### 2. Start the Server
+
+```bash
+cd qwen-omni-tester
+```
+
+### 3. Install Dependencies
+
+```bash
+npm install
+```
+
+### 4. Start the Server
 
 ```bash
 npm start
